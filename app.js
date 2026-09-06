@@ -125,7 +125,28 @@
     });
   }
   function rirVal(v) { return typeof v === "number" ? v : null; }
-  function blankSet() { return { reps: "", rir: null, rirL: null, rirR: null }; }
+  function blankSet(w) {
+    return { w: w === undefined || w === null ? "" : w, reps: "", rir: null, rirL: null, rirR: null };
+  }
+
+  // The weight every set shares, or null when they differ.
+  function uniformWeight(d) {
+    if (!d.sets.length) return d.w;
+    var first = d.sets[0].w;
+    for (var i = 1; i < d.sets.length; i++) if (d.sets[i].w !== first) return null;
+    return first;
+  }
+
+  // One value when every set shares a weight, a range when they differ.
+  function weightLabel(d) {
+    var vals = d.sets.map(function (s) { return s.w; })
+      .filter(function (v) { return v !== "" && v !== null && !isNaN(parseFloat(v)); })
+      .map(parseFloat);
+    if (!vals.length) return "BW";
+    var lo = Math.min.apply(null, vals);
+    var hi = Math.max.apply(null, vals);
+    return lo === hi ? String(lo) : lo + "–" + hi;
+  }
   function exById(id) {
     return plan[current].ex.filter(function (e) { return e.id === id; })[0];
   }
@@ -196,9 +217,10 @@
     var o = {};
     plan[dayId].ex.forEach(function (e) {
       var w = weights[e.id] !== undefined ? weights[e.id] : e.w;
+      if (w === null || w === undefined) w = "";
       var sets = [];
-      for (var i = 0; i < e.s; i++) sets.push(blankSet());
-      o[e.id] = { w: w === null ? "" : w, sets: sets };
+      for (var i = 0; i < e.s; i++) sets.push(blankSet(w));
+      o[e.id] = { w: w, sets: sets };
     });
     return o;
   }
@@ -228,10 +250,13 @@
       var s = saved.log && saved.log[e.id];
       if (!s) return;
       if (s.w !== undefined && s.w !== null) log[e.id].w = s.w;
+      var base = log[e.id].w;
       (s.sets || []).forEach(function (st, i) {
         // a session logged before the plan shrank keeps every set it recorded
-        while (log[e.id].sets.length <= i) log[e.id].sets.push(blankSet());
+        while (log[e.id].sets.length <= i) log[e.id].sets.push(blankSet(base));
         log[e.id].sets[i] = {
+          // sessions logged before per-set weights inherit the exercise's
+          w: st.w === undefined || st.w === null ? base : st.w,
           reps: st.reps === undefined || st.reps === null ? "" : String(st.reps),
           rir: rirVal(st.rir),
           rirL: rirVal(st.rirL),
@@ -356,7 +381,11 @@
     if (commitWeights) {
       // persist the weights used so next session pre-fills from here
       plan[current].ex.forEach(function (e) {
-        var v = log[e.id].w;
+        // the working weight is where the exercise started, so sets that ramp
+        // or drop off don't become next session's pre-fill
+        var first = log[e.id].sets.map(function (s) { return s.w; })
+          .filter(function (v) { return v !== "" && v !== null && !isNaN(parseFloat(v)); })[0];
+        var v = first === undefined ? log[e.id].w : first;
         if (v !== "" && v !== null && !isNaN(parseFloat(v))) weights[e.id] = parseFloat(v);
       });
       try {
@@ -407,7 +436,7 @@
       var lines = [];
       d.sets.forEach(function (st, i) {
         if (st.reps === "" && st.rir === null && st.rirL === null && st.rirR === null) return;
-        var w = d.w === "" ? "BW" : d.w;
+        var w = st.w === "" || st.w === null ? "BW" : st.w;
         var s = (i + 1) + ". " + (st.reps === "" ? "—" : st.reps) + " @ " + w;
         if (e.lr) {
           if (st.rirL !== null || st.rirR !== null) {
@@ -438,8 +467,17 @@
     exEl.querySelector(".exnm").textContent = e.n;
     exEl.querySelector(".exname small").textContent = summary(e, d);
     var w = exEl.querySelector(".exw");
-    w.textContent = d.w === "" ? "BW" : d.w;
+    w.textContent = weightLabel(d);
     w.classList.toggle("done", filled === d.sets.length);
+
+    // keep the fill field truthful about whether the sets still agree,
+    // but never rewrite it under the cursor
+    var wt = exEl.querySelector(".wt");
+    if (wt && wt !== document.activeElement) {
+      var uw = uniformWeight(d);
+      wt.value = uw === null ? "" : uw;
+      wt.placeholder = uw === null ? "Mixed" : "BW";
+    }
   }
 
   // --- plan edits -----------------------------------------------------------
@@ -480,7 +518,8 @@
   function addSet(id) {
     var d = log[id];
     if (d.sets.length >= MAX_SETS) return;
-    d.sets.push(blankSet());
+    var lastW = d.sets.length ? d.sets[d.sets.length - 1].w : d.w;
+    d.sets.push(blankSet(lastW));
     exById(id).s = d.sets.length;
     queuePlan();
     queueSave();
@@ -556,7 +595,7 @@
         '<span class="exnm">' + esc(e.n) + '</span>' +
         (e.hold ? ' <span class="hold">· hold load</span>' : '') +
         '<small>' + esc(summary(e, d)) + '</small></span>' +
-        '<span class="exw' + (filled === d.sets.length ? ' done' : '') + '">' + esc(d.w === "" ? "BW" : d.w) + '</span><span class="chev"></span></button>';
+        '<span class="exw' + (filled === d.sets.length ? ' done' : '') + '">' + esc(weightLabel(d)) + '</span><span class="chev"></span></button>';
       if (editMode) {
         html += '<div class="exctl">' +
           '<button class="mv" type="button" data-dir="-1"' + (idx === 0 ? " disabled" : "") +
@@ -571,11 +610,18 @@
         '" placeholder="' + esc(defaultName(e.id)) + '"></div>';
       html += '<div class="wrow"><label for="r-' + e.id + '">Reps</label>' +
         '<input type="text" id="r-' + e.id + '" class="exr" value="' + esc(e.r) + '" placeholder="8-12"></div>';
-      html += '<div class="wrow"><label for="w-' + e.id + '">Weight</label>' +
-        '<input type="number" inputmode="decimal" step="0.5" id="w-' + e.id + '" class="wt" value="' + esc(d.w) + '" placeholder="BW"></div>';
+      var uw = uniformWeight(d);
+      html += '<div class="wrow"><label for="w-' + e.id + '">All sets</label>' +
+        '<input type="number" inputmode="decimal" step="0.5" id="w-' + e.id + '" class="wt" value="' +
+        esc(uw === null ? "" : uw) + '" placeholder="' + (uw === null ? "Mixed" : "BW") + '">' +
+        '<span class="hint">fills every set below</span></div>';
       d.sets.forEach(function (st, i) {
         html += '<div class="set" data-set="' + i + '"><div class="setline"><span class="setno">' + (i + 1) + '</span>' +
-          '<input type="number" inputmode="numeric" class="reps" value="' + esc(st.reps) + '" placeholder="reps">' +
+          '<input type="number" inputmode="decimal" step="0.5" class="setw" value="' + esc(st.w) + '" placeholder="BW"' +
+          ' aria-label="Set ' + (i + 1) + ' weight">' +
+          '<span class="unit">×</span>' +
+          '<input type="number" inputmode="numeric" class="reps" value="' + esc(st.reps) + '" placeholder="reps"' +
+          ' aria-label="Set ' + (i + 1) + ' reps">' +
           '<span class="unit">' + (e.unit === "sec" ? "sec" : "reps") + '</span></div>';
         if (e.lr) {
           html += rirRow("L", st.rirL, "L") + rirRow("R", st.rirR, "R");
@@ -728,10 +774,25 @@
       });
     });
 
+    // The exercise weight is a fill: it writes through to every set, which is
+    // what straight sets want. Per-set boxes below then override individually.
     root.querySelectorAll(".wt").forEach(function (inp) {
       inp.addEventListener("input", function () {
         var ex = inp.closest(".ex");
-        log[ex.dataset.ex].w = inp.value;
+        var d = log[ex.dataset.ex];
+        d.w = inp.value;
+        d.sets.forEach(function (s) { s.w = inp.value; });
+        ex.querySelectorAll(".setw").forEach(function (o) { o.value = inp.value; });
+        refreshHead(ex);
+        queueSave();
+      });
+    });
+
+    root.querySelectorAll(".setw").forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        var ex = inp.closest(".ex");
+        var i = +inp.closest(".set").dataset.set;
+        log[ex.dataset.ex].sets[i].w = inp.value;
         refreshHead(ex);
         queueSave();
       });

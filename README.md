@@ -27,11 +27,13 @@ Every session is filed under a specific date. Tap the date in the header to open
 
 ## Logging a session
 
-- Tap an exercise to expand it, then enter the weight once and reps per set.
+- Tap an exercise to expand it. Each set has its own weight and reps, so ramps and drop-offs record properly.
+- **All sets** fills every set with one weight — the usual case for straight sets. Adjust individual sets underneath afterwards; the field then reads *Mixed* until they agree again.
+- The number beside a collapsed exercise is its weight, or a range like `90–120` when the sets differ.
 - Rate each set 0–5 RIR (reps in reserve). Red = 0–1, green = 2–3 (the target), blue = 4–5.
 - Exercises marked left/right get a separate RIR rating per side.
 - **Copy log** produces a plain-text summary you can paste anywhere.
-- **Save session** stores the session and carries each weight forward, so the next time you open that day it pre-fills with what you last lifted.
+- **Save session** stores the session and carries each exercise's opening weight forward, so the next time you open that day it pre-fills with where you started last time rather than where you ramped to.
 
 Entries autosave as you type, so switching days or dates, or closing the tab mid-workout, doesn't lose anything. Clearing every entry for a date removes that session, and its dot, again.
 
