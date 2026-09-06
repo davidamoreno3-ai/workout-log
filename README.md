@@ -26,6 +26,7 @@ Every session is filed under a specific date. Tap the date in the header to open
 ## Logging a session
 
 - Tap an exercise to expand it, then enter the weight once and reps per set.
+- **Name** renames the exercise — for when you swap a movement or your gym calls the machine something else. The rename sticks for every session and shows up in the copy log. Clear the field to get the built-in name back.
 - Rate each set 0–5 RIR (reps in reserve). Red = 0–1, green = 2–3 (the target), blue = 4–5.
 - Exercises marked left/right get a separate RIR rating per side.
 - **Copy log** produces a plain-text summary you can paste anywhere.
@@ -58,4 +59,4 @@ Two things worth knowing:
 
 ## Data storage
 
-Weights (`workout-weights`) and the last 200 sessions (`workout-sessions`) are kept in the browser's `localStorage`, keyed by date. When the cap is hit the oldest dates are dropped. Nothing is uploaded anywhere, and the data is tied to the specific browser/device/profile you use — clearing site data deletes it.
+Weights (`workout-weights`), renamed exercises (`workout-names`) and the last 200 sessions (`workout-sessions`) are kept in the browser's `localStorage`, keyed by date. When the cap is hit the oldest dates are dropped. Nothing is uploaded anywhere, and the data is tied to the specific browser/device/profile you use — clearing site data deletes it.

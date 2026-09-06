@@ -67,6 +67,7 @@
 
   var WEIGHTS_KEY = "workout-weights";
   var SESSIONS_KEY = "workout-sessions";
+  var NAMES_KEY = "workout-names";
   var MAX_SESSIONS = 200;
   var AUTOSAVE_MS = 500;
 
@@ -82,6 +83,7 @@
 
   var root = document.getElementById("root");
   var weights = {};       // exerciseId -> last used weight
+  var names = {};         // exerciseId -> renamed exercise, when it differs
   var sessions = [];      // saved sessions, oldest date first
   var current = null;     // active dayId
   var date = null;        // date being logged, "YYYY-MM-DD"
@@ -93,6 +95,7 @@
   var openEx = null;      // expanded exercise id
   var toastEl = null;
   var saveTimer = null;
+  var nameTimer = null;
 
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
   function dateKey(d) {
@@ -118,6 +121,7 @@
   function exById(id) {
     return PROGRAM[current].ex.filter(function (e) { return e.id === id; })[0];
   }
+  function exName(e) { return names[e.id] || e.n; }
 
   function blankLog(dayId) {
     var o = {};
@@ -213,6 +217,21 @@
       if (s && s.value) sessions = JSON.parse(s.value) || [];
     } catch (e) { sessions = []; }
     if (!Array.isArray(sessions)) sessions = [];
+    try {
+      var n = await storage.get(NAMES_KEY);
+      if (n && n.value) names = JSON.parse(n.value) || {};
+    } catch (e) { names = {}; }
+  }
+
+  function queueNames() {
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(saveNames, AUTOSAVE_MS);
+  }
+
+  function saveNames() {
+    clearTimeout(nameTimer);
+    nameTimer = null;
+    try { storage.set(NAMES_KEY, JSON.stringify(names)); } catch (e) {}
   }
 
   async function persist(commitWeights) {
@@ -261,6 +280,7 @@
   }
 
   function flush() {
+    if (nameTimer) saveNames();
     if (!saveTimer) return;
     clearTimeout(saveTimer);
     saveTimer = null;
@@ -300,7 +320,7 @@
         }
         lines.push(s);
       });
-      if (lines.length) out += e.n + ":\n" + lines.join("\n") + "\n\n";
+      if (lines.length) out += exName(e) + ":\n" + lines.join("\n") + "\n\n";
     });
     if (p.cardio && cardioDone) out += "Cardio: Stairmaster, Zone 2, 20 min\n\n";
     if (notes.trim()) out += "Notes: " + notes.trim() + "\n";
@@ -316,6 +336,7 @@
     var e = exById(exEl.dataset.ex);
     var d = log[e.id];
     var filled = d.sets.filter(function (s) { return s.reps !== ""; }).length;
+    exEl.querySelector(".exnm").textContent = exName(e);
     exEl.querySelector(".exname small").textContent = summary(e, d);
     var w = exEl.querySelector(".exw");
     w.textContent = d.w === "" ? "BW" : d.w;
@@ -375,11 +396,15 @@
       var filled = d.sets.filter(function (s) { return s.reps !== ""; }).length;
       var open = e.id === openEx;
       html += '<div class="ex' + (open ? " open" : "") + '" data-ex="' + e.id + '">';
-      html += '<button class="exhead" type="button" aria-expanded="' + open + '"><span class="exname">' + esc(e.n) +
+      html += '<button class="exhead" type="button" aria-expanded="' + open + '"><span class="exname">' +
+        '<span class="exnm">' + esc(exName(e)) + '</span>' +
         (e.hold ? ' <span class="hold">· hold load</span>' : '') +
         '<small>' + esc(summary(e, d)) + '</small></span>' +
         '<span class="exw' + (filled === e.s ? ' done' : '') + '">' + esc(d.w === "" ? "BW" : d.w) + '</span><span class="chev"></span></button>';
-      html += '<div class="body"><div class="wrow"><label for="w-' + e.id + '">Weight</label>' +
+      html += '<div class="body"><div class="wrow"><label for="n-' + e.id + '">Name</label>' +
+        '<input type="text" id="n-' + e.id + '" class="exn" value="' + esc(names[e.id] || "") +
+        '" placeholder="' + esc(e.n) + '" aria-label="Rename ' + esc(e.n) + '"></div>';
+      html += '<div class="wrow"><label for="w-' + e.id + '">Weight</label>' +
         '<input type="number" inputmode="decimal" step="0.5" id="w-' + e.id + '" class="wt" value="' + esc(d.w) + '" placeholder="BW"></div>';
       d.sets.forEach(function (st, i) {
         html += '<div class="set" data-set="' + i + '"><div class="setline"><span class="setno">' + (i + 1) + '</span>' +
@@ -465,6 +490,20 @@
           b.setAttribute("aria-expanded", "true");
           openEx = ex.dataset.ex;
         }
+      });
+    });
+
+    // A rename sticks across sessions, like a weight does. Clearing the field
+    // drops the override and the program's own name comes back.
+    root.querySelectorAll(".exn").forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        var ex = inp.closest(".ex");
+        var id = ex.dataset.ex;
+        var v = inp.value.trim();
+        if (v && v !== exById(id).n) names[id] = v;
+        else delete names[id];
+        refreshHead(ex);
+        queueNames();
       });
     });
 
