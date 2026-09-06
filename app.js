@@ -69,6 +69,7 @@
   var SESSIONS_KEY = "workout-sessions";
   var NAMES_KEY = "workout-names";   // pre-plan renames; read once to migrate
   var PLAN_KEY = "workout-plan";
+  var PICKS_KEY = "workout-picks";
   var MAX_SESSIONS = 200;
   var MAX_SETS = 20;
   var AUTOSAVE_MS = 500;
@@ -86,6 +87,7 @@
   var root = document.getElementById("root");
   var plan = null;        // PROGRAM materialized and editable, same shape
   var weights = {};       // exerciseId -> last used weight
+  var picks = {};         // date -> the day deliberately chosen for it
   var sessions = [];      // saved sessions, oldest date first
   var current = null;     // active dayId
   var date = null;        // date being logged, "YYYY-MM-DD"
@@ -244,9 +246,23 @@
   // Whatever was logged on that date, else the session the weekday calls for.
   // Rest days fall back to the caller's choice.
   function dayForDate(key, fallback) {
-    var saved = sessions.filter(function (s) { return s.date === key; });
-    var dayId = saved.length ? saved[saved.length - 1].dayId : DAYMAP[parseKey(key).getDay()];
+    var dayId = picks[key];
+    if (!plan[dayId]) {
+      var saved = sessions.filter(function (s) { return s.date === key; });
+      dayId = saved.length ? saved[saved.length - 1].dayId : DAYMAP[parseKey(key).getDay()];
+    }
     return plan[dayId] ? dayId : fallback;
+  }
+
+  // Choosing a day is remembered for that date whether or not anything gets
+  // logged, so the weekday's default never overrides a deliberate choice.
+  function setPick(dayId) {
+    picks[date] = dayId;
+    var keys = Object.keys(picks);
+    if (keys.length > MAX_SESSIONS) {
+      keys.sort().slice(0, keys.length - MAX_SESSIONS).forEach(function (k) { delete picks[k]; });
+    }
+    try { storage.set(PICKS_KEY, JSON.stringify(picks)); } catch (e) {}
   }
 
   function selectDate(key) {
@@ -285,6 +301,10 @@
       if (s && s.value) sessions = JSON.parse(s.value) || [];
     } catch (e) { sessions = []; }
     if (!Array.isArray(sessions)) sessions = [];
+    try {
+      var pk = await storage.get(PICKS_KEY);
+      if (pk && pk.value) picks = JSON.parse(pk.value) || {};
+    } catch (e) { picks = {}; }
 
     var names = {};
     try {
@@ -636,6 +656,7 @@
       b.addEventListener("click", function () {
         if (b.dataset.day === current) return;
         flush();
+        setPick(b.dataset.day);
         loadDay(b.dataset.day);
         render();
       });

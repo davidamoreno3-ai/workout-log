@@ -15,14 +15,14 @@ It ships with this week, which you can then edit to taste:
 | Saturday | Push 2 (+ cardio) |
 | Sunday | Pull 2 |
 
-It opens on today's session and you can tap any other day to switch.
+The schedule is only a default. It opens on whatever the weekday calls for, and tapping another day switches to it — that choice is then remembered for that date, whether or not you log anything, so closing the app or moving around the calendar won't put you back on the scheduled session.
 
 ## Calendar
 
 Every session is filed under a specific date. Tap the date in the header to open a month calendar:
 
 - A dot under a day means a workout is logged on that date.
-- Tapping a day loads it — whatever you logged there, or a fresh session for whichever day of the split that weekday calls for. Picking a rest day keeps the session already on screen, so you can still file a workout there.
+- Tapping a day loads it — the session you chose for that date, else whatever you logged there, else a fresh one for whichever day of the split that weekday calls for. Picking a rest day keeps the session already on screen, so you can still file a workout there.
 - The date in the header turns amber whenever you're on a day other than today, and **Jump to today** brings you back.
 
 ## Logging a session
@@ -78,4 +78,4 @@ Two things worth knowing:
 
 ## Data storage
 
-Your edited program (`workout-plan`), weights (`workout-weights`) and the last 200 sessions (`workout-sessions`) are kept in the browser's `localStorage`, keyed by date. When the cap is hit the oldest dates are dropped. Nothing is uploaded anywhere, and the data is tied to the specific browser/device/profile you use — clearing site data deletes it.
+Your edited program (`workout-plan`), weights (`workout-weights`), the session chosen per date (`workout-picks`) and the last 200 sessions (`workout-sessions`) are kept in the browser's `localStorage`, keyed by date. When the cap is hit the oldest dates are dropped. Nothing is uploaded anywhere, and the data is tied to the specific browser/device/profile you use — clearing site data deletes it.
