@@ -67,8 +67,10 @@
 
   var WEIGHTS_KEY = "workout-weights";
   var SESSIONS_KEY = "workout-sessions";
-  var NAMES_KEY = "workout-names";
+  var NAMES_KEY = "workout-names";   // pre-plan renames; read once to migrate
+  var PLAN_KEY = "workout-plan";
   var MAX_SESSIONS = 200;
+  var MAX_SETS = 20;
   var AUTOSAVE_MS = 500;
 
   // Hosts that inject window.storage keep it; standalone falls back to localStorage.
@@ -82,8 +84,8 @@
   };
 
   var root = document.getElementById("root");
+  var plan = null;        // PROGRAM materialized and editable, same shape
   var weights = {};       // exerciseId -> last used weight
-  var names = {};         // exerciseId -> renamed exercise, when it differs
   var sessions = [];      // saved sessions, oldest date first
   var current = null;     // active dayId
   var date = null;        // date being logged, "YYYY-MM-DD"
@@ -93,9 +95,12 @@
   var calOpen = false;
   var calView = null;     // month shown in the calendar, { y, m }
   var openEx = null;      // expanded exercise id
+  var editMode = false;   // list is in reorder/remove mode
+  var focusName = null;   // exercise id whose name field should take focus
+  var uid = 0;            // counter behind generated exercise ids
   var toastEl = null;
   var saveTimer = null;
-  var nameTimer = null;
+  var planTimer = null;
 
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
   function dateKey(d) {
@@ -118,17 +123,79 @@
     });
   }
   function rirVal(v) { return typeof v === "number" ? v : null; }
+  function blankSet() { return { reps: "", rir: null, rirL: null, rirR: null }; }
   function exById(id) {
-    return PROGRAM[current].ex.filter(function (e) { return e.id === id; })[0];
+    return plan[current].ex.filter(function (e) { return e.id === id; })[0];
   }
-  function exName(e) { return names[e.id] || e.n; }
+  function exIndex(id) {
+    var arr = plan[current].ex;
+    for (var i = 0; i < arr.length; i++) if (arr[i].id === id) return i;
+    return -1;
+  }
+  // The name an exercise reverts to when its Name field is emptied.
+  function defaultName(id) {
+    for (var k in PROGRAM) {
+      var f = PROGRAM[k].ex.filter(function (e) { return e.id === id; })[0];
+      if (f) return f.n;
+    }
+    return "New exercise";
+  }
+
+  // PROGRAM is only the starting point; once materialized the plan is what the
+  // app reads, so exercises can be added, removed and reordered.
+  function seedPlan(names) {
+    var p = JSON.parse(JSON.stringify(PROGRAM));
+    ORDER.forEach(function (k) {
+      p[k].ex.forEach(function (e) { if (names[e.id]) e.n = names[e.id]; });
+    });
+    return p;
+  }
+
+  function normalizePlan(p, names) {
+    var usable = p && typeof p === "object" && ORDER.every(function (k) {
+      return p[k] && Array.isArray(p[k].ex);
+    });
+    if (!usable) return seedPlan(names);
+    var out = {};
+    ORDER.forEach(function (k) {
+      out[k] = {
+        name: PROGRAM[k].name,
+        day: PROGRAM[k].day,
+        cardio: PROGRAM[k].cardio,
+        ex: p[k].ex.filter(function (e) { return e && e.id; }).map(function (e) {
+          var w = e.w;
+          return {
+            id: String(e.id),
+            n: String(e.n || defaultName(String(e.id))),
+            s: Math.max(1, Math.min(MAX_SETS, parseInt(e.s, 10) || 1)),
+            r: String(e.r === undefined || e.r === null ? "" : e.r),
+            w: w === "" || w === undefined ? null : w,
+            lr: !!e.lr,
+            hold: !!e.hold,
+            unit: e.unit === "sec" ? "sec" : undefined
+          };
+        })
+      };
+    });
+    return out;
+  }
+
+  // Generated ids must not collide with ones already in the plan.
+  function seedUid() {
+    ORDER.forEach(function (k) {
+      plan[k].ex.forEach(function (e) {
+        var m = /^ux(\d+)$/.exec(e.id);
+        if (m) uid = Math.max(uid, +m[1]);
+      });
+    });
+  }
 
   function blankLog(dayId) {
     var o = {};
-    PROGRAM[dayId].ex.forEach(function (e) {
+    plan[dayId].ex.forEach(function (e) {
       var w = weights[e.id] !== undefined ? weights[e.id] : e.w;
       var sets = [];
-      for (var i = 0; i < e.s; i++) sets.push({ reps: "", rir: null, rirL: null, rirR: null });
+      for (var i = 0; i < e.s; i++) sets.push(blankSet());
       o[e.id] = { w: w === null ? "" : w, sets: sets };
     });
     return o;
@@ -155,12 +222,13 @@
     var saved = findSession(date, dayId);
     if (!saved) return;
 
-    PROGRAM[dayId].ex.forEach(function (e) {
+    plan[dayId].ex.forEach(function (e) {
       var s = saved.log && saved.log[e.id];
       if (!s) return;
       if (s.w !== undefined && s.w !== null) log[e.id].w = s.w;
       (s.sets || []).forEach(function (st, i) {
-        if (i >= log[e.id].sets.length) return;
+        // a session logged before the plan shrank keeps every set it recorded
+        while (log[e.id].sets.length <= i) log[e.id].sets.push(blankSet());
         log[e.id].sets[i] = {
           reps: st.reps === undefined || st.reps === null ? "" : String(st.reps),
           rir: rirVal(st.rir),
@@ -178,7 +246,7 @@
   function dayForDate(key, fallback) {
     var saved = sessions.filter(function (s) { return s.date === key; });
     var dayId = saved.length ? saved[saved.length - 1].dayId : DAYMAP[parseKey(key).getDay()];
-    return PROGRAM[dayId] ? dayId : fallback;
+    return plan[dayId] ? dayId : fallback;
   }
 
   function selectDate(key) {
@@ -217,21 +285,31 @@
       if (s && s.value) sessions = JSON.parse(s.value) || [];
     } catch (e) { sessions = []; }
     if (!Array.isArray(sessions)) sessions = [];
+
+    var names = {};
     try {
       var n = await storage.get(NAMES_KEY);
       if (n && n.value) names = JSON.parse(n.value) || {};
     } catch (e) { names = {}; }
+
+    var stored = null;
+    try {
+      var pl = await storage.get(PLAN_KEY);
+      if (pl && pl.value) stored = JSON.parse(pl.value);
+    } catch (e) { stored = null; }
+    plan = normalizePlan(stored, names);
+    seedUid();
   }
 
-  function queueNames() {
-    clearTimeout(nameTimer);
-    nameTimer = setTimeout(saveNames, AUTOSAVE_MS);
+  function queuePlan() {
+    clearTimeout(planTimer);
+    planTimer = setTimeout(savePlan, AUTOSAVE_MS);
   }
 
-  function saveNames() {
-    clearTimeout(nameTimer);
-    nameTimer = null;
-    try { storage.set(NAMES_KEY, JSON.stringify(names)); } catch (e) {}
+  function savePlan() {
+    clearTimeout(planTimer);
+    planTimer = null;
+    try { storage.set(PLAN_KEY, JSON.stringify(plan)); } catch (e) {}
   }
 
   async function persist(commitWeights) {
@@ -245,7 +323,7 @@
       sessions.push({
         date: d,
         dayId: dayId,
-        dayName: PROGRAM[dayId].name,
+        dayName: plan[dayId].name,
         log: JSON.parse(JSON.stringify(log)),
         cardio: cardioDone,
         notes: notes
@@ -257,7 +335,7 @@
     var ok = true;
     if (commitWeights) {
       // persist the weights used so next session pre-fills from here
-      PROGRAM[current].ex.forEach(function (e) {
+      plan[current].ex.forEach(function (e) {
         var v = log[e.id].w;
         if (v !== "" && v !== null && !isNaN(parseFloat(v))) weights[e.id] = parseFloat(v);
       });
@@ -280,7 +358,7 @@
   }
 
   function flush() {
-    if (nameTimer) saveNames();
+    if (planTimer) savePlan();
     if (!saveTimer) return;
     clearTimeout(saveTimer);
     saveTimer = null;
@@ -300,7 +378,7 @@
   }
 
   function buildText() {
-    var p = PROGRAM[current];
+    var p = plan[current];
     var thisYear = date.slice(0, 4) === todayKey().slice(0, 4);
     var out = "Traditional Strength Training\n" + p.name + " — " + prettyDate(date, !thisYear) + "\n";
     out += "Rest between sets: 2 minutes, unless otherwise noted\n\n";
@@ -320,7 +398,7 @@
         }
         lines.push(s);
       });
-      if (lines.length) out += exName(e) + ":\n" + lines.join("\n") + "\n\n";
+      if (lines.length) out += e.n + ":\n" + lines.join("\n") + "\n\n";
     });
     if (p.cardio && cardioDone) out += "Cardio: Stairmaster, Zone 2, 20 min\n\n";
     if (notes.trim()) out += "Notes: " + notes.trim() + "\n";
@@ -328,19 +406,75 @@
   }
 
   function summary(e, d) {
+    var total = d.sets.length;
     var filled = d.sets.filter(function (s) { return s.reps !== ""; }).length;
-    return e.s + " × " + e.r + (filled ? "  ·  " + filled + "/" + e.s + " logged" : "");
+    return total + " × " + e.r + (filled ? "  ·  " + filled + "/" + total + " logged" : "");
   }
 
   function refreshHead(exEl) {
     var e = exById(exEl.dataset.ex);
     var d = log[e.id];
     var filled = d.sets.filter(function (s) { return s.reps !== ""; }).length;
-    exEl.querySelector(".exnm").textContent = exName(e);
+    exEl.querySelector(".exnm").textContent = e.n;
     exEl.querySelector(".exname small").textContent = summary(e, d);
     var w = exEl.querySelector(".exw");
     w.textContent = d.w === "" ? "BW" : d.w;
-    w.classList.toggle("done", filled === e.s);
+    w.classList.toggle("done", filled === d.sets.length);
+  }
+
+  // --- plan edits -----------------------------------------------------------
+
+  function moveEx(id, delta) {
+    var arr = plan[current].ex;
+    var i = exIndex(id);
+    var j = i + delta;
+    if (i < 0 || j < 0 || j >= arr.length) return;
+    var moved = arr[i];
+    arr[i] = arr[j];
+    arr[j] = moved;
+    queuePlan();
+    render();
+  }
+
+  function addEx() {
+    var id = "ux" + (++uid);
+    plan[current].ex.push({ id: id, n: "New exercise", s: 3, r: "8-12", w: null });
+    log[id] = { w: "", sets: [blankSet(), blankSet(), blankSet()] };
+    editMode = false;
+    openEx = id;
+    focusName = id;
+    queuePlan();
+    render();
+  }
+
+  function removeEx(id) {
+    plan[current].ex = plan[current].ex.filter(function (e) { return e.id !== id; });
+    delete log[id];
+    if (openEx === id) openEx = null;
+    queuePlan();
+    queueSave();
+    render();
+  }
+
+  // Set count lives on the plan, so an added set is there next session too.
+  function addSet(id) {
+    var d = log[id];
+    if (d.sets.length >= MAX_SETS) return;
+    d.sets.push(blankSet());
+    exById(id).s = d.sets.length;
+    queuePlan();
+    queueSave();
+    render();
+  }
+
+  function removeSet(id) {
+    var d = log[id];
+    if (d.sets.length <= 1) return;
+    d.sets.pop();
+    exById(id).s = d.sets.length;
+    queuePlan();
+    queueSave();
+    render();
   }
 
   function rirRow(label, val, side) {
@@ -379,31 +513,44 @@
   }
 
   function render() {
-    var p = PROGRAM[current];
+    var p = plan[current];
     var isToday = date === todayKey();
+    var last = p.ex.length - 1;
     var html = '<div class="top"><div class="datebar"><h1>' + esc(p.name) + '</h1>' +
       '<button class="datepick' + (isToday ? "" : " off") + '" type="button" id="datepick" aria-expanded="' + calOpen + '">' +
       esc(prettyDate(date)) + '<span class="cchev"></span></button></div>';
     if (calOpen) html += renderCal();
     html += '<div class="days">';
     ORDER.forEach(function (k) {
-      html += '<button class="day" data-day="' + k + '" aria-pressed="' + (k === current) + '">' + esc(PROGRAM[k].name) + '</button>';
+      html += '<button class="day" data-day="' + k + '" aria-pressed="' + (k === current) + '">' + esc(plan[k].name) + '</button>';
     });
-    html += '</div></div><div class="list">';
+    html += '</div></div><div class="list' + (editMode ? " editing" : "") + '">';
 
-    p.ex.forEach(function (e) {
+    p.ex.forEach(function (e, idx) {
       var d = log[e.id];
       var filled = d.sets.filter(function (s) { return s.reps !== ""; }).length;
-      var open = e.id === openEx;
+      var open = e.id === openEx && !editMode;
       html += '<div class="ex' + (open ? " open" : "") + '" data-ex="' + e.id + '">';
-      html += '<button class="exhead" type="button" aria-expanded="' + open + '"><span class="exname">' +
-        '<span class="exnm">' + esc(exName(e)) + '</span>' +
+      html += '<div class="exhead">' +
+        '<button class="extoggle" type="button" aria-expanded="' + open + '"><span class="exname">' +
+        '<span class="exnm">' + esc(e.n) + '</span>' +
         (e.hold ? ' <span class="hold">· hold load</span>' : '') +
         '<small>' + esc(summary(e, d)) + '</small></span>' +
-        '<span class="exw' + (filled === e.s ? ' done' : '') + '">' + esc(d.w === "" ? "BW" : d.w) + '</span><span class="chev"></span></button>';
+        '<span class="exw' + (filled === d.sets.length ? ' done' : '') + '">' + esc(d.w === "" ? "BW" : d.w) + '</span><span class="chev"></span></button>';
+      if (editMode) {
+        html += '<div class="exctl">' +
+          '<button class="mv" type="button" data-dir="-1"' + (idx === 0 ? " disabled" : "") +
+          ' aria-label="Move ' + esc(e.n) + ' up">↑</button>' +
+          '<button class="mv" type="button" data-dir="1"' + (idx === last ? " disabled" : "") +
+          ' aria-label="Move ' + esc(e.n) + ' down">↓</button>' +
+          '<button class="rm" type="button" aria-label="Remove ' + esc(e.n) + '">×</button></div>';
+      }
+      html += '</div>';
       html += '<div class="body"><div class="wrow"><label for="n-' + e.id + '">Name</label>' +
-        '<input type="text" id="n-' + e.id + '" class="exn" value="' + esc(names[e.id] || "") +
-        '" placeholder="' + esc(e.n) + '" aria-label="Rename ' + esc(e.n) + '"></div>';
+        '<input type="text" id="n-' + e.id + '" class="exn" value="' + esc(e.n) +
+        '" placeholder="' + esc(defaultName(e.id)) + '"></div>';
+      html += '<div class="wrow"><label for="r-' + e.id + '">Reps</label>' +
+        '<input type="text" id="r-' + e.id + '" class="exr" value="' + esc(e.r) + '" placeholder="8-12"></div>';
       html += '<div class="wrow"><label for="w-' + e.id + '">Weight</label>' +
         '<input type="number" inputmode="decimal" step="0.5" id="w-' + e.id + '" class="wt" value="' + esc(d.w) + '" placeholder="BW"></div>';
       d.sets.forEach(function (st, i) {
@@ -417,8 +564,20 @@
         }
         html += '</div>';
       });
+      html += '<div class="setctl">' +
+        '<button class="addset" type="button">+ Set</button>' +
+        '<button class="rmset" type="button"' + (d.sets.length <= 1 ? " disabled" : "") + '>− Set</button></div>';
       html += '</div></div>';
     });
+    html += '</div>';
+
+    html += '<div class="listctl">';
+    if (editMode) {
+      html += '<button class="btn" id="addex" type="button">+ Add exercise</button>' +
+        '<button class="btn primary" id="editdone" type="button">Done</button>';
+    } else {
+      html += '<button class="btn" id="edit" type="button">Edit exercises</button>';
+    }
     html += '</div>';
 
     if (p.cardio) {
@@ -440,6 +599,12 @@
     if (active) days.scrollLeft = active.offsetLeft - (days.clientWidth - active.offsetWidth) / 2;
 
     wire();
+
+    if (focusName) {
+      var f = root.querySelector("#n-" + focusName);
+      if (f) { f.focus(); f.select(); }
+      focusName = null;
+    }
   }
 
   function wire() {
@@ -476,13 +641,13 @@
       });
     });
 
-    root.querySelectorAll(".exhead").forEach(function (b) {
+    root.querySelectorAll(".extoggle").forEach(function (b) {
       b.addEventListener("click", function () {
         var ex = b.closest(".ex");
         var wasOpen = ex.classList.contains("open");
         root.querySelectorAll(".ex.open").forEach(function (o) {
           o.classList.remove("open");
-          o.querySelector(".exhead").setAttribute("aria-expanded", "false");
+          o.querySelector(".extoggle").setAttribute("aria-expanded", "false");
         });
         openEx = null;
         if (!wasOpen) {
@@ -493,17 +658,52 @@
       });
     });
 
-    // A rename sticks across sessions, like a weight does. Clearing the field
-    // drops the override and the program's own name comes back.
+    root.querySelectorAll(".mv").forEach(function (b) {
+      b.addEventListener("click", function () {
+        moveEx(b.closest(".ex").dataset.ex, +b.dataset.dir);
+      });
+    });
+
+    root.querySelectorAll(".rm").forEach(function (b) {
+      b.addEventListener("click", function () {
+        removeEx(b.closest(".ex").dataset.ex);
+      });
+    });
+
+    root.querySelectorAll(".addset").forEach(function (b) {
+      b.addEventListener("click", function () { addSet(b.closest(".ex").dataset.ex); });
+    });
+
+    root.querySelectorAll(".rmset").forEach(function (b) {
+      b.addEventListener("click", function () { removeSet(b.closest(".ex").dataset.ex); });
+    });
+
+    var editBtn = root.querySelector("#edit");
+    if (editBtn) editBtn.addEventListener("click", function () { editMode = true; render(); });
+
+    var doneBtn = root.querySelector("#editdone");
+    if (doneBtn) doneBtn.addEventListener("click", function () { editMode = false; render(); });
+
+    var addBtn = root.querySelector("#addex");
+    if (addBtn) addBtn.addEventListener("click", addEx);
+
+    // Emptying the field puts the program's own name back.
     root.querySelectorAll(".exn").forEach(function (inp) {
       inp.addEventListener("input", function () {
         var ex = inp.closest(".ex");
-        var id = ex.dataset.ex;
         var v = inp.value.trim();
-        if (v && v !== exById(id).n) names[id] = v;
-        else delete names[id];
+        exById(ex.dataset.ex).n = v || defaultName(ex.dataset.ex);
         refreshHead(ex);
-        queueNames();
+        queuePlan();
+      });
+    });
+
+    root.querySelectorAll(".exr").forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        var ex = inp.closest(".ex");
+        exById(ex.dataset.ex).r = inp.value.trim();
+        refreshHead(ex);
+        queuePlan();
       });
     });
 

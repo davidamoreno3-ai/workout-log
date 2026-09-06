@@ -1,8 +1,10 @@
 # Workout Log
 
-A private, local-only logger for a fixed 6-day training split. Runs entirely in your browser — no server, no account, no data leaving your device.
+A private, local-only logger for a 6-day training split. Runs entirely in your browser — no server, no account, no data leaving your device.
 
 ## The split
+
+It ships with this week, which you can then edit to taste:
 
 | Day | Session |
 | --- | --- |
@@ -26,13 +28,30 @@ Every session is filed under a specific date. Tap the date in the header to open
 ## Logging a session
 
 - Tap an exercise to expand it, then enter the weight once and reps per set.
-- **Name** renames the exercise — for when you swap a movement or your gym calls the machine something else. The rename sticks for every session and shows up in the copy log. Clear the field to get the built-in name back.
 - Rate each set 0–5 RIR (reps in reserve). Red = 0–1, green = 2–3 (the target), blue = 4–5.
 - Exercises marked left/right get a separate RIR rating per side.
 - **Copy log** produces a plain-text summary you can paste anywhere.
 - **Save session** stores the session and carries each weight forward, so the next time you open that day it pre-fills with what you last lifted.
 
 Entries autosave as you type, so switching days or dates, or closing the tab mid-workout, doesn't lose anything. Clearing every entry for a date removes that session, and its dot, again.
+
+## Changing the program
+
+The built-in split is only a starting point — every edit below sticks for that day of the week, in every future session.
+
+Inside an expanded exercise:
+
+- **Name** — for when you swap a movement or your gym calls the machine something else. Clear the field to get the built-in name back; the placeholder always shows what that was.
+- **Reps** — the target rep range shown under the exercise name.
+- **+ Set** / **− Set** — adds or drops a set. `− Set` removes the last one and stops at one set.
+
+**Edit exercises**, below the list, switches the list into edit mode:
+
+- **↑ / ↓** move an exercise up or down the day's order.
+- **×** removes it from that day.
+- **+ Add exercise** appends a blank one and opens it ready to be named.
+
+Removing an exercise only takes it off the plan — sessions you already logged keep their data, and it reappears if you add the exercise back. Likewise, shortening an exercise to fewer sets never truncates a session you logged with more.
 
 ## Running it
 
@@ -59,4 +78,4 @@ Two things worth knowing:
 
 ## Data storage
 
-Weights (`workout-weights`), renamed exercises (`workout-names`) and the last 200 sessions (`workout-sessions`) are kept in the browser's `localStorage`, keyed by date. When the cap is hit the oldest dates are dropped. Nothing is uploaded anywhere, and the data is tied to the specific browser/device/profile you use — clearing site data deletes it.
+Your edited program (`workout-plan`), weights (`workout-weights`) and the last 200 sessions (`workout-sessions`) are kept in the browser's `localStorage`, keyed by date. When the cap is hit the oldest dates are dropped. Nothing is uploaded anywhere, and the data is tied to the specific browser/device/profile you use — clearing site data deletes it.
