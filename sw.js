@@ -1,4 +1,4 @@
-var CACHE = "workout-log-v6";
+var CACHE = "workout-log-v7";
 var ASSETS = [
   "./",
   "./index.html",

@@ -417,19 +417,7 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 }
 .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.restrow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 13px 16px;
-  border-bottom: 1px solid var(--line);
-}
-.restrow label {
-  font-size: 14.5px;
-  font-weight: 550;
-}
-.restrow select {
+.exrest {
   background: var(--surface2);
   border: 1px solid var(--line);
   color: var(--text);
@@ -437,10 +425,10 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   font-family: inherit;
   font-feature-settings: "tnum" 1;
   font-size: 16px;
-  font-weight: 600;
   padding: 8px 10px;
+  width: 90px;
 }
-.restrow select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.exrest:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 .setline .unit {
   font-size: 12.5px;

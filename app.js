@@ -166,6 +166,9 @@
     var hit = REST_OPTIONS.filter(function (o) { return o.s === secs; })[0];
     return hit ? hit.label : REST_OPTIONS[0].label;
   }
+  function validRest(v, fallback) {
+    return REST_OPTIONS.some(function (o) { return o.s === +v; }) ? +v : fallback;
+  }
   // The name an exercise reverts to when its Name field is emptied.
   function defaultName(id) {
     for (var k in PROGRAM) {
@@ -194,11 +197,12 @@
     if (!usable) p = seedPlan(names);
     var out = {};
     ORDER.forEach(function (k) {
+      // rest used to live on the day; exercises without their own inherit it
+      var dayRest = validRest(p[k].rest, DEFAULT_REST);
       out[k] = {
         name: PROGRAM[k].name,
         day: PROGRAM[k].day,
         cardio: PROGRAM[k].cardio,
-        rest: REST_OPTIONS.some(function (o) { return o.s === +p[k].rest; }) ? +p[k].rest : DEFAULT_REST,
         ex: p[k].ex.filter(function (e) { return e && e.id; }).map(function (e) {
           var w = e.w;
           return {
@@ -209,7 +213,8 @@
             w: w === "" || w === undefined ? null : w,
             lr: !!e.lr,
             hold: !!e.hold,
-            unit: e.unit === "sec" ? "sec" : "reps"
+            unit: e.unit === "sec" ? "sec" : "reps",
+            rest: validRest(e.rest, dayRest)
           };
         })
       };
@@ -444,7 +449,7 @@
     var p = plan[current];
     var thisYear = date.slice(0, 4) === todayKey().slice(0, 4);
     var out = "Traditional Strength Training\n" + p.name + " — " + prettyDate(date, !thisYear) + "\n";
-    out += "Rest between sets: " + restLabel(p.rest) + "\n\n";
+    var blocks = [];
     p.ex.forEach(function (e) {
       var d = log[e.id];
       var lines = [];
@@ -462,8 +467,18 @@
         }
         lines.push(s);
       });
-      if (lines.length) out += e.n + ":\n" + lines.join("\n") + "\n\n";
+      if (lines.length) blocks.push({ n: e.n, rest: e.rest, lines: lines });
     });
+
+    // One rest for everything reads as a single line up top, the way it always
+    // has; only once exercises differ is it worth repeating per exercise.
+    var uniform = blocks.length > 0 && blocks.every(function (b) { return b.rest === blocks[0].rest; });
+    if (uniform) out += "Rest between sets: " + restLabel(blocks[0].rest) + "\n";
+    out += "\n";
+    blocks.forEach(function (b) {
+      out += b.n + (uniform ? "" : " — rest " + restLabel(b.rest)) + ":\n" + b.lines.join("\n") + "\n\n";
+    });
+
     if (p.cardio && cardioDone) out += "Cardio: Stairmaster, Zone 2, 20 min\n\n";
     if (notes.trim()) out += "Notes: " + notes.trim() + "\n";
     return out.trim();
@@ -511,7 +526,11 @@
 
   function addEx() {
     var id = "ux" + (++uid);
-    plan[current].ex.push({ id: id, n: "New exercise", s: 3, r: "8-12", w: null, unit: "reps" });
+    var prev = plan[current].ex[plan[current].ex.length - 1];
+    plan[current].ex.push({
+      id: id, n: "New exercise", s: 3, r: "8-12", w: null, unit: "reps",
+      rest: prev ? prev.rest : DEFAULT_REST
+    });
     log[id] = { w: "", sets: [blankSet(), blankSet(), blankSet()] };
     editMode = false;
     openEx = id;
@@ -629,6 +648,12 @@
         '<button class="unitbtn" type="button" data-u="reps" aria-pressed="' + (e.unit !== "sec") + '">Reps</button>' +
         '<button class="unitbtn" type="button" data-u="sec" aria-pressed="' + (e.unit === "sec") + '">Time</button>' +
         '</div></div>';
+      html += '<div class="wrow"><label for="rest-' + e.id + '">Rest</label>' +
+        '<select class="exrest" id="rest-' + e.id + '">';
+      REST_OPTIONS.forEach(function (o) {
+        html += '<option value="' + o.s + '"' + (o.s === e.rest ? " selected" : "") + '>' + esc(o.label) + '</option>';
+      });
+      html += '</select></div>';
       var uw = uniformWeight(d);
       html += '<div class="wrow"><label for="w-' + e.id + '">All sets</label>' +
         '<input type="number" inputmode="decimal" step="0.5" id="w-' + e.id + '" class="wt" value="' +
@@ -670,12 +695,6 @@
       html += '<label class="cardio"><input type="checkbox" id="cardio"' + (cardioDone ? " checked" : "") +
         '><span>Stairmaster, Zone 2, 20 min<small>After lifting. Conversational pace, ~110–125 bpm.</small></span></label>';
     }
-
-    html += '<div class="restrow"><label for="rest">Rest between sets</label><select id="rest">';
-    REST_OPTIONS.forEach(function (o) {
-      html += '<option value="' + o.s + '"' + (o.s === p.rest ? " selected" : "") + '>' + esc(o.label) + '</option>';
-    });
-    html += '</select></div>';
 
     html += '<div class="notes"><label for="notes">Notes — sleep, energy, anything off</label><textarea id="notes" placeholder="Optional">' + esc(notes) + '</textarea></div>';
 
@@ -801,10 +820,11 @@
       });
     });
 
-    var rest = root.querySelector("#rest");
-    if (rest) rest.addEventListener("change", function () {
-      plan[current].rest = +rest.value;
-      queuePlan();
+    root.querySelectorAll(".exrest").forEach(function (sel) {
+      sel.addEventListener("change", function () {
+        exById(sel.closest(".ex").dataset.ex).rest = +sel.value;
+        queuePlan();
+      });
     });
 
     root.querySelectorAll(".exr").forEach(function (inp) {
