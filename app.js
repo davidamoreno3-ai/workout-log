@@ -73,6 +73,13 @@
   var MAX_SESSIONS = 200;
   var MAX_SETS = 20;
   var AUTOSAVE_MS = 500;
+  var REST_OPTIONS = [
+    { s: 120, label: "2:00" },
+    { s: 90, label: "1:30" },
+    { s: 60, label: "1:00" },
+    { s: 30, label: ":30" }
+  ];
+  var DEFAULT_REST = 120;
 
   // Hosts that inject window.storage keep it; standalone falls back to localStorage.
   var storage = window.storage || {
@@ -155,6 +162,10 @@
     for (var i = 0; i < arr.length; i++) if (arr[i].id === id) return i;
     return -1;
   }
+  function restLabel(secs) {
+    var hit = REST_OPTIONS.filter(function (o) { return o.s === secs; })[0];
+    return hit ? hit.label : REST_OPTIONS[0].label;
+  }
   // The name an exercise reverts to when its Name field is emptied.
   function defaultName(id) {
     for (var k in PROGRAM) {
@@ -174,17 +185,20 @@
     return p;
   }
 
+  // Both a stored plan and a freshly seeded one come through here, so a field
+  // added later gets its default either way.
   function normalizePlan(p, names) {
     var usable = p && typeof p === "object" && ORDER.every(function (k) {
       return p[k] && Array.isArray(p[k].ex);
     });
-    if (!usable) return seedPlan(names);
+    if (!usable) p = seedPlan(names);
     var out = {};
     ORDER.forEach(function (k) {
       out[k] = {
         name: PROGRAM[k].name,
         day: PROGRAM[k].day,
         cardio: PROGRAM[k].cardio,
+        rest: REST_OPTIONS.some(function (o) { return o.s === +p[k].rest; }) ? +p[k].rest : DEFAULT_REST,
         ex: p[k].ex.filter(function (e) { return e && e.id; }).map(function (e) {
           var w = e.w;
           return {
@@ -195,7 +209,7 @@
             w: w === "" || w === undefined ? null : w,
             lr: !!e.lr,
             hold: !!e.hold,
-            unit: e.unit === "sec" ? "sec" : undefined
+            unit: e.unit === "sec" ? "sec" : "reps"
           };
         })
       };
@@ -430,14 +444,15 @@
     var p = plan[current];
     var thisYear = date.slice(0, 4) === todayKey().slice(0, 4);
     var out = "Traditional Strength Training\n" + p.name + " — " + prettyDate(date, !thisYear) + "\n";
-    out += "Rest between sets: 2 minutes, unless otherwise noted\n\n";
+    out += "Rest between sets: " + restLabel(p.rest) + "\n\n";
     p.ex.forEach(function (e) {
       var d = log[e.id];
       var lines = [];
       d.sets.forEach(function (st, i) {
         if (st.reps === "" && st.rir === null && st.rirL === null && st.rirR === null) return;
         var w = st.w === "" || st.w === null ? "BW" : st.w;
-        var s = (i + 1) + ". " + (st.reps === "" ? "—" : st.reps) + " @ " + w;
+        var amount = st.reps === "" ? "—" : st.reps + (e.unit === "sec" ? " sec" : "");
+        var s = (i + 1) + ". " + amount + " @ " + w;
         if (e.lr) {
           if (st.rirL !== null || st.rirR !== null) {
             s += ", RIR: L - " + (st.rirL === null ? "—" : st.rirL) + ", R - " + (st.rirR === null ? "—" : st.rirR);
@@ -496,7 +511,7 @@
 
   function addEx() {
     var id = "ux" + (++uid);
-    plan[current].ex.push({ id: id, n: "New exercise", s: 3, r: "8-12", w: null });
+    plan[current].ex.push({ id: id, n: "New exercise", s: 3, r: "8-12", w: null, unit: "reps" });
     log[id] = { w: "", sets: [blankSet(), blankSet(), blankSet()] };
     editMode = false;
     openEx = id;
@@ -608,8 +623,12 @@
       html += '<div class="body"><div class="wrow"><label for="n-' + e.id + '">Name</label>' +
         '<input type="text" id="n-' + e.id + '" class="exn" value="' + esc(e.n) +
         '" placeholder="' + esc(defaultName(e.id)) + '"></div>';
-      html += '<div class="wrow"><label for="r-' + e.id + '">Reps</label>' +
+      html += '<div class="wrow"><label for="r-' + e.id + '">Target</label>' +
         '<input type="text" id="r-' + e.id + '" class="exr" value="' + esc(e.r) + '" placeholder="8-12"></div>';
+      html += '<div class="wrow"><label>Measure</label><div class="seg">' +
+        '<button class="unitbtn" type="button" data-u="reps" aria-pressed="' + (e.unit !== "sec") + '">Reps</button>' +
+        '<button class="unitbtn" type="button" data-u="sec" aria-pressed="' + (e.unit === "sec") + '">Time</button>' +
+        '</div></div>';
       var uw = uniformWeight(d);
       html += '<div class="wrow"><label for="w-' + e.id + '">All sets</label>' +
         '<input type="number" inputmode="decimal" step="0.5" id="w-' + e.id + '" class="wt" value="' +
@@ -620,8 +639,9 @@
           '<input type="number" inputmode="decimal" step="0.5" class="setw" value="' + esc(st.w) + '" placeholder="BW"' +
           ' aria-label="Set ' + (i + 1) + ' weight">' +
           '<span class="unit">×</span>' +
-          '<input type="number" inputmode="numeric" class="reps" value="' + esc(st.reps) + '" placeholder="reps"' +
-          ' aria-label="Set ' + (i + 1) + ' reps">' +
+          '<input type="number" inputmode="numeric" class="reps" value="' + esc(st.reps) +
+          '" placeholder="' + (e.unit === "sec" ? "sec" : "reps") + '"' +
+          ' aria-label="Set ' + (i + 1) + (e.unit === "sec" ? " seconds" : " reps") + '">' +
           '<span class="unit">' + (e.unit === "sec" ? "sec" : "reps") + '</span></div>';
         if (e.lr) {
           html += rirRow("L", st.rirL, "L") + rirRow("R", st.rirR, "R");
@@ -650,6 +670,12 @@
       html += '<label class="cardio"><input type="checkbox" id="cardio"' + (cardioDone ? " checked" : "") +
         '><span>Stairmaster, Zone 2, 20 min<small>After lifting. Conversational pace, ~110–125 bpm.</small></span></label>';
     }
+
+    html += '<div class="restrow"><label for="rest">Rest between sets</label><select id="rest">';
+    REST_OPTIONS.forEach(function (o) {
+      html += '<option value="' + o.s + '"' + (o.s === p.rest ? " selected" : "") + '>' + esc(o.label) + '</option>';
+    });
+    html += '</select></div>';
 
     html += '<div class="notes"><label for="notes">Notes — sleep, energy, anything off</label><textarea id="notes" placeholder="Optional">' + esc(notes) + '</textarea></div>';
 
@@ -763,6 +789,22 @@
         refreshHead(ex);
         queuePlan();
       });
+    });
+
+    root.querySelectorAll(".unitbtn").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.closest(".ex").dataset.ex;
+        if (exById(id).unit === b.dataset.u) return;
+        exById(id).unit = b.dataset.u;
+        queuePlan();
+        render();   // the set rows relabel with it
+      });
+    });
+
+    var rest = root.querySelector("#rest");
+    if (rest) rest.addEventListener("change", function () {
+      plan[current].rest = +rest.value;
+      queuePlan();
     });
 
     root.querySelectorAll(".exr").forEach(function (inp) {

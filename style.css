@@ -362,6 +362,11 @@ input.exn {
   text-align: left;
 }
 
+input.exr {
+  width: 116px;
+  text-align: left;
+}
+
 input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 .set {
@@ -389,6 +394,53 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   font-size: 11.5px;
   color: var(--muted);
 }
+
+.seg {
+  display: flex;
+  gap: 4px;
+}
+.seg button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.seg button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a1408;
+}
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.restrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.restrow label {
+  font-size: 14.5px;
+  font-weight: 550;
+}
+.restrow select {
+  background: var(--surface2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 8px;
+  font-family: inherit;
+  font-feature-settings: "tnum" 1;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 8px 10px;
+}
+.restrow select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 .setline .unit {
   font-size: 12.5px;
