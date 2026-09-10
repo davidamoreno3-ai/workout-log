@@ -417,6 +417,14 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 }
 .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+.ver {
+  padding: 10px 16px 14px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  opacity: .6;
+}
+
 .exrest {
   background: var(--surface2);
   border: 1px solid var(--line);

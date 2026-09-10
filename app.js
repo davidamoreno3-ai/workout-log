@@ -80,6 +80,9 @@
     { s: 30, label: ":30" }
   ];
   var DEFAULT_REST = 120;
+  // shown at the foot of the app so it's obvious whether an update landed;
+  // bump alongside CACHE in sw.js
+  var VERSION = "v8";
 
   // Hosts that inject window.storage keep it; standalone falls back to localStorage.
   var storage = window.storage || {
@@ -701,6 +704,7 @@
     html += '<div class="toast" style="display:none"></div>';
     html += '<div class="actions"><button class="btn" id="copy" type="button">Copy log</button><button class="btn primary" id="save" type="button">Save session</button></div>';
     html += '<div class="out" id="out" style="display:none"><textarea readonly></textarea></div>';
+    html += '<div class="ver">' + esc(VERSION) + '</div>';
 
     root.innerHTML = html;
     toastEl = root.querySelector(".toast");

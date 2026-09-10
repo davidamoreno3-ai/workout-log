@@ -77,7 +77,7 @@ It ships a web app manifest, icons and a service worker, so it installs as a sta
 
 Two things worth knowing:
 
-- The service worker serves the cached copy first and refreshes in the background, so a new version lands on the launch *after* the one that fetched it. Open it twice to pick up a change.
+- The service worker goes to the network first and falls back to its cache, so a new version lands the next time you open the app with a connection, and the app still opens without one. The version it's running is printed at the very bottom.
 - Installed apps can keep storage separate from the browser that installed them, so a session logged in Safari may not show up in the Home Screen copy. Log a set after installing to see which way your phone behaves, and use **Copy log** for anything you'd hate to lose.
 
 ## Data storage
