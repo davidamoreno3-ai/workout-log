@@ -1,4 +1,4 @@
-var CACHE = "workout-log-v8";
+var CACHE = "workout-log-v9";
 var NET_TIMEOUT = 3000;
 var ASSETS = [
   "./",

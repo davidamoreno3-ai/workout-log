@@ -82,7 +82,7 @@
   var DEFAULT_REST = 120;
   // shown at the foot of the app so it's obvious whether an update landed;
   // bump alongside CACHE in sw.js
-  var VERSION = "v8";
+  var VERSION = "v9";
 
   // Hosts that inject window.storage keep it; standalone falls back to localStorage.
   var storage = window.storage || {
@@ -531,7 +531,7 @@
     var id = "ux" + (++uid);
     var prev = plan[current].ex[plan[current].ex.length - 1];
     plan[current].ex.push({
-      id: id, n: "New exercise", s: 3, r: "8-12", w: null, unit: "reps",
+      id: id, n: "New exercise", s: 3, r: "8-12", w: null, unit: "reps", lr: false,
       rest: prev ? prev.rest : DEFAULT_REST
     });
     log[id] = { w: "", sets: [blankSet(), blankSet(), blankSet()] };
@@ -650,6 +650,10 @@
       html += '<div class="wrow"><label>Measure</label><div class="seg">' +
         '<button class="unitbtn" type="button" data-u="reps" aria-pressed="' + (e.unit !== "sec") + '">Reps</button>' +
         '<button class="unitbtn" type="button" data-u="sec" aria-pressed="' + (e.unit === "sec") + '">Time</button>' +
+        '</div></div>';
+      html += '<div class="wrow"><label>RIR</label><div class="seg">' +
+        '<button class="lrbtn" type="button" data-lr="0" aria-pressed="' + !e.lr + '">Single</button>' +
+        '<button class="lrbtn" type="button" data-lr="1" aria-pressed="' + !!e.lr + '">Per side</button>' +
         '</div></div>';
       html += '<div class="wrow"><label for="rest-' + e.id + '">Rest</label>' +
         '<select class="exrest" id="rest-' + e.id + '">';
@@ -811,6 +815,32 @@
         exById(ex.dataset.ex).n = v || defaultName(ex.dataset.ex);
         refreshHead(ex);
         queuePlan();
+      });
+    });
+
+    // Switching sides carries an obvious rating across rather than asking for
+    // it again, but never overwrites one already there — so toggling back and
+    // forth cannot lose a rating.
+    root.querySelectorAll(".lrbtn").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.closest(".ex").dataset.ex;
+        var lr = b.dataset.lr === "1";
+        var e = exById(id);
+        if (e.lr === lr) return;
+        e.lr = lr;
+        log[id].sets.forEach(function (st) {
+          if (lr) {
+            if (st.rir !== null && st.rirL === null && st.rirR === null) {
+              st.rirL = st.rir;
+              st.rirR = st.rir;
+            }
+          } else if (st.rir === null && st.rirL !== null && st.rirL === st.rirR) {
+            st.rir = st.rirL;
+          }
+        });
+        queuePlan();
+        queueSave();
+        render();
       });
     });
 

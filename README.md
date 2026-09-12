@@ -31,7 +31,7 @@ Every session is filed under a specific date. Tap the date in the header to open
 - **All sets** fills every set with one weight — the usual case for straight sets. Adjust individual sets underneath afterwards; the field then reads *Mixed* until they agree again.
 - The number beside a collapsed exercise is its weight, or a range like `90–120` when the sets differ.
 - Rate each set 0–5 RIR (reps in reserve). Red = 0–1, green = 2–3 (the target), blue = 4–5.
-- Exercises marked left/right get a separate RIR rating per side.
+- Exercises set to per-side RIR get a separate rating for each of L and R.
 - **Copy log** produces a plain-text summary you can paste anywhere.
 - **Save session** stores the session and carries each exercise's opening weight forward, so the next time you open that day it pre-fills with where you started last time rather than where you ramped to.
 
@@ -46,6 +46,7 @@ Inside an expanded exercise:
 - **Name** — for when you swap a movement or your gym calls the machine something else. Clear the field to get the built-in name back; the placeholder always shows what that was.
 - **Target** — the rep or time range shown under the exercise name.
 - **Measure** — whether the exercise is counted in **Reps** or **Time**. On Time, the set boxes are labelled `sec` and the copy log reads `1. 50 sec @ BW`. The Plank ships on Time; anything else can be switched.
+- **RIR** — **Single** rates the set once; **Per side** splits it into L and R, for anything unilateral. Switching to Per side copies an existing rating onto both sides, and switching back collapses matching sides into one, but neither overwrites a rating already there — so you can flip back and forth without losing anything.
 - **Rest** — rest between sets for that exercise: 2:00, 1:30, 1:00 or :30. When every exercise you logged shares a rest, the copy log states it once at the top; when they differ, each exercise carries its own (`T-Bar Row — rest 1:00:`).
 - **+ Set** / **− Set** — adds or drops a set. `− Set` removes the last one and stops at one set.
 
