@@ -417,6 +417,61 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 }
 .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+.prevbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface2);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.prevbar:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.prevtext {
+  padding: 12px 16px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface2);
+}
+.prevtext pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+/* what this exercise did last time, sitting just above today's inputs */
+.last {
+  padding: 8px 10px 9px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  background: var(--surface2);
+  font-size: 12.5px;
+  font-feature-settings: "tnum" 1;
+  color: var(--text);
+  line-height: 1.5;
+}
+.lastlab {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
 .ver {
   padding: 10px 16px 14px;
   text-align: center;

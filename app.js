@@ -82,7 +82,7 @@
   var DEFAULT_REST = 120;
   // shown at the foot of the app so it's obvious whether an update landed;
   // bump alongside CACHE in sw.js
-  var VERSION = "v9";
+  var VERSION = "v10";
 
   // Hosts that inject window.storage keep it; standalone falls back to localStorage.
   var storage = window.storage || {
@@ -108,6 +108,7 @@
   var calView = null;     // month shown in the calendar, { y, m }
   var openEx = null;      // expanded exercise id
   var editMode = false;   // list is in reorder/remove mode
+  var prevOpen = false;   // the previous session panel is expanded
   var focusName = null;   // exercise id whose name field should take focus
   var uid = 0;            // counter behind generated exercise ids
   var toastEl = null;
@@ -448,25 +449,37 @@
     toast(ok ? "Session saved." : "Couldn't save — copy your log so you don't lose it.", !ok);
   }
 
-  function buildText() {
-    var p = plan[current];
-    var thisYear = date.slice(0, 4) === todayKey().slice(0, 4);
-    var out = "Traditional Strength Training\n" + p.name + " — " + prettyDate(date, !thisYear) + "\n";
+  // The weight a stored set was logged at. Sessions from before per-set
+  // weights only carry one for the whole exercise.
+  function setWeight(st, base) {
+    var w = st.w === undefined || st.w === null ? base : st.w;
+    return w === "" || w === null || w === undefined ? "BW" : w;
+  }
+
+  // Renders any session, live or stored, so the previous one reads exactly
+  // like the copy log does.
+  function sessionText(dayId, dkey, data, cardio, notesText) {
+    var p = plan[dayId];
+    var thisYear = dkey.slice(0, 4) === todayKey().slice(0, 4);
+    var out = "Traditional Strength Training\n" + p.name + " — " + prettyDate(dkey, !thisYear) + "\n";
     var blocks = [];
     p.ex.forEach(function (e) {
-      var d = log[e.id];
+      var d = data[e.id];
+      if (!d) return;
       var lines = [];
-      d.sets.forEach(function (st, i) {
-        if (st.reps === "" && st.rir === null && st.rirL === null && st.rirR === null) return;
-        var w = st.w === "" || st.w === null ? "BW" : st.w;
-        var amount = st.reps === "" ? "—" : st.reps + (e.unit === "sec" ? " sec" : "");
+      (d.sets || []).forEach(function (st, i) {
+        var rir = rirVal(st.rir), rirL = rirVal(st.rirL), rirR = rirVal(st.rirR);
+        var reps = st.reps === undefined || st.reps === null ? "" : String(st.reps);
+        if (reps === "" && rir === null && rirL === null && rirR === null) return;
+        var w = setWeight(st, d.w);
+        var amount = reps === "" ? "—" : reps + (e.unit === "sec" ? " sec" : "");
         var s = (i + 1) + ". " + amount + " @ " + w;
         if (e.lr) {
-          if (st.rirL !== null || st.rirR !== null) {
-            s += ", RIR: L - " + (st.rirL === null ? "—" : st.rirL) + ", R - " + (st.rirR === null ? "—" : st.rirR);
+          if (rirL !== null || rirR !== null) {
+            s += ", RIR: L - " + (rirL === null ? "—" : rirL) + ", R - " + (rirR === null ? "—" : rirR);
           }
-        } else if (st.rir !== null) {
-          s += ", RIR - " + st.rir;
+        } else if (rir !== null) {
+          s += ", RIR - " + rir;
         }
         lines.push(s);
       });
@@ -482,9 +495,39 @@
       out += b.n + (uniform ? "" : " — rest " + restLabel(b.rest)) + ":\n" + b.lines.join("\n") + "\n\n";
     });
 
-    if (p.cardio && cardioDone) out += "Cardio: Stairmaster, Zone 2, 20 min\n\n";
-    if (notes.trim()) out += "Notes: " + notes.trim() + "\n";
+    if (p.cardio && cardio) out += "Cardio: Stairmaster, Zone 2, 20 min\n\n";
+    if (notesText && notesText.trim()) out += "Notes: " + notesText.trim() + "\n";
     return out.trim();
+  }
+
+  function buildText() {
+    return sessionText(current, date, log, cardioDone, notes);
+  }
+
+  // The most recent save of this same workout before the date on screen.
+  // sessions is kept sorted by date, so the last match is the nearest one.
+  function prevSession(dayId, before) {
+    var hits = sessions.filter(function (s) { return s.dayId === dayId && s.date < before; });
+    return hits.length ? hits[hits.length - 1] : null;
+  }
+
+  // A one-line recap of what this exercise did last time, compact enough to
+  // sit above today's inputs.
+  function lastTimeLine(prev, e) {
+    var d = prev && prev.log && prev.log[e.id];
+    if (!d) return "";
+    return (d.sets || []).map(function (st) {
+      var reps = st.reps === undefined || st.reps === null ? "" : String(st.reps);
+      if (reps === "") return null;
+      var out = reps + (e.unit === "sec" ? "s" : "") + " @ " + setWeight(st, d.w);
+      var rir = rirVal(st.rir), rirL = rirVal(st.rirL), rirR = rirVal(st.rirR);
+      if (rirL !== null || rirR !== null) {
+        out += " (L" + (rirL === null ? "–" : rirL) + "/R" + (rirR === null ? "–" : rirR) + ")";
+      } else if (rir !== null) {
+        out += " (" + rir + ")";
+      }
+      return out;
+    }).filter(Boolean).join("   ·   ");
   }
 
   function summary(e, d) {
@@ -620,7 +663,22 @@
     ORDER.forEach(function (k) {
       html += '<button class="day" data-day="' + k + '" aria-pressed="' + (k === current) + '">' + esc(plan[k].name) + '</button>';
     });
-    html += '</div></div><div class="list' + (editMode ? " editing" : "") + '">';
+    html += '</div></div>';
+
+    var prev = prevSession(current, date);
+    if (prev) {
+      var pYear = prev.date.slice(0, 4) !== todayKey().slice(0, 4);
+      html += '<button class="prevbar" type="button" id="prevbar" aria-expanded="' + prevOpen + '">' +
+        '<span>Last ' + esc(p.name) + ' · ' + esc(prettyDate(prev.date, pYear)) + '</span>' +
+        '<span class="cchev"></span></button>';
+      if (prevOpen) {
+        html += '<div class="prevtext"><pre>' +
+          esc(sessionText(prev.dayId, prev.date, prev.log || {}, prev.cardio, prev.notes)) +
+          '</pre></div>';
+      }
+    }
+
+    html += '<div class="list' + (editMode ? " editing" : "") + '">';
 
     p.ex.forEach(function (e, idx) {
       var d = log[e.id];
@@ -666,6 +724,8 @@
         '<input type="number" inputmode="decimal" step="0.5" id="w-' + e.id + '" class="wt" value="' +
         esc(uw === null ? "" : uw) + '" placeholder="' + (uw === null ? "Mixed" : "BW") + '">' +
         '<span class="hint">fills every set below</span></div>';
+      var lt = lastTimeLine(prev, e);
+      if (lt) html += '<div class="last"><span class="lastlab">Last time</span>' + esc(lt) + '</div>';
       d.sets.forEach(function (st, i) {
         html += '<div class="set" data-set="' + i + '"><div class="setline"><span class="setno">' + (i + 1) + '</span>' +
           '<input type="number" inputmode="decimal" step="0.5" class="setw" value="' + esc(st.w) + '" placeholder="BW"' +
@@ -797,6 +857,9 @@
     root.querySelectorAll(".rmset").forEach(function (b) {
       b.addEventListener("click", function () { removeSet(b.closest(".ex").dataset.ex); });
     });
+
+    var prevBtn = root.querySelector("#prevbar");
+    if (prevBtn) prevBtn.addEventListener("click", function () { prevOpen = !prevOpen; render(); });
 
     var editBtn = root.querySelector("#edit");
     if (editBtn) editBtn.addEventListener("click", function () { editMode = true; render(); });

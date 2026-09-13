@@ -25,6 +25,15 @@ Every session is filed under a specific date. Tap the date in the header to open
 - Tapping a day loads it — the session you chose for that date, else whatever you logged there, else a fresh one for whichever day of the split that weekday calls for. Picking a rest day keeps the session already on screen, so you can still file a workout there.
 - The date in the header turns amber whenever you're on a day other than today, and **Jump to today** brings you back.
 
+## Last time
+
+Whenever there's an earlier save of the same workout, the app shows you what you did then:
+
+- A bar above the exercise list reads **Last Pull 1 · Sun, Sep 6**. Tap it for the whole session, laid out exactly like the copy log.
+- Inside each expanded exercise, a **Last time** strip sits above today's inputs: `12 @ 140 (2) · 10 @ 145 (1) · 8 @ 150 (0)` — reps at weight, with RIR in brackets, or `(L2/R0)` for a per-side exercise.
+
+It's the nearest save *before* the date you're on, per workout, so viewing an older date compares it against the one before that. An exercise you've never logged simply has no strip.
+
 ## Logging a session
 
 - Tap an exercise to expand it. Each set has its own weight and reps, so ramps and drop-offs record properly.
