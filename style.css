@@ -301,11 +301,6 @@ html, body {
   font-weight: 450;
   margin-top: 2px;
 }
-.hold {
-  color: var(--accent);
-  font-weight: 550;
-}
-
 .exw {
   font-size: 15px;
   font-weight: 600;

@@ -5,7 +5,7 @@
     legs1: { name: "Legs 1", day: "Tuesday", ex: [
       { id: "fs", n: "Front Squat", s: 4, r: "6-8", w: 185 },
       { id: "rdbl", n: "Elevated Reverse DB Lunge", s: 3, r: "20-24", w: 50 },
-      { id: "klc", n: "Kneeling Leg Curl", s: 3, r: "10-12", w: 40, lr: true, hold: true },
+      { id: "klc", n: "Kneeling Leg Curl", s: 3, r: "10-12", w: 40, lr: true },
       { id: "habd", n: "Hip Abduction", s: 3, r: "12-15", w: 160 },
       { id: "le", n: "Leg Extension", s: 4, r: "12-15", w: 85 },
       { id: "calf1", n: "Calf Raises (heavy)", s: 4, r: "6-8", w: 220 }
@@ -57,7 +57,7 @@
       { id: "scr", n: "Seated Cable Row (Close Grip)", s: 3, r: "8-12", w: 145 },
       { id: "sardcf", n: "SA Rear-Delt Cable Fly", s: 3, r: "12-15", w: 17.5, lr: true },
       { id: "sbcc", n: "Straight Bar Cable Curl", s: 3, r: "8-12", w: 42.5 },
-      { id: "cbdc", n: "Crossbody DB Curl", s: 3, r: "10-12", w: 17.5, lr: true, hold: true },
+      { id: "cbdc", n: "Crossbody DB Curl", s: 3, r: "10-12", w: 17.5, lr: true },
       { id: "bay", n: "Bayesian Curl", s: 3, r: "10-12", w: 15.5 }
     ]}
   };
@@ -82,7 +82,7 @@
   var DEFAULT_REST = 120;
   // shown at the foot of the app so it's obvious whether an update landed;
   // bump alongside CACHE in sw.js
-  var VERSION = "v10";
+  var VERSION = "v11";
 
   // Hosts that inject window.storage keep it; standalone falls back to localStorage.
   var storage = window.storage || {
@@ -216,7 +216,6 @@
             r: String(e.r === undefined || e.r === null ? "" : e.r),
             w: w === "" || w === undefined ? null : w,
             lr: !!e.lr,
-            hold: !!e.hold,
             unit: e.unit === "sec" ? "sec" : "reps",
             rest: validRest(e.rest, dayRest)
           };
@@ -688,7 +687,6 @@
       html += '<div class="exhead">' +
         '<button class="extoggle" type="button" aria-expanded="' + open + '"><span class="exname">' +
         '<span class="exnm">' + esc(e.n) + '</span>' +
-        (e.hold ? ' <span class="hold">· hold load</span>' : '') +
         '<small>' + esc(summary(e, d)) + '</small></span>' +
         '<span class="exw' + (filled === d.sets.length ? ' done' : '') + '">' + esc(weightLabel(d)) + '</span><span class="chev"></span></button>';
       if (editMode) {
